@@ -1,0 +1,44 @@
+{{ if .Release.IsInstall }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ template "fullname" . }}
+  labels:
+    app: {{ template "fullname" . }}
+    chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+    release: "{{ .Release.Name }}"
+    heritage: "{{ .Release.Service }}"
+spec:
+  template:
+    metadata:
+      labels:
+        app: {{ template "fullname" . }}
+        chart: "{{ .Chart.Name }}-{{ .Chart.Version }}"
+        release: "{{ .Release.Name }}"
+        heritage: "{{ .Release.Service }}"
+      annotations:
+        {{- if eq .Values.store.backend "etcd" }}
+        pod.beta.kubernetes.io/init-containers: '[
+              {
+                  "name": "create-cluster",
+                  "image": "gcr.io/google_containers/etcd-amd64:3.0.14",
+                  "command": ["/bin/sh", "-c", "while ! etcdctl --endpoints {{ .Values.store.endpoints }} cluster-health; do sleep 1 && echo -n .; done"],
+                  "imagePullPolicy": {{ default "Always" .Values.imagePullPolicy | quote }}
+              }
+          ]'
+        {{ end }}
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: {{ template "fullname" . }}
+        image: "{{ .Values.image }}:{{ .Values.imageTag }}"
+        imagePullPolicy: {{ default "" .Values.imagePullPolicy | quote }}
+        command: ["/usr/local/bin/stolonctl"]
+        args:
+          - init
+          - --cluster-name={{ .Values.clusterName }}
+          - --store-backend={{ .Values.store.backend }}
+          - --store-endpoints={{ .Values.store.endpoints }}
+          - --yes
+{{ end }}
+
